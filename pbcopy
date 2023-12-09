@@ -1,0 +1,243 @@
+#include "Charlie2D.h"
+
+#include <fstream>
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+class Player : public GameObject {
+    public:
+        Player() {
+            
+        }
+
+        void start() override {
+            loadTexture("img/enemy.png");
+            size.x /= 4;
+            size.y /= 4;
+            debug = true;
+            dealWithTiles = true;
+            startPoint = getPosition();
+            //setCentered();
+        }
+
+        void update(float deltaTime) override {
+            velocity.x = (InputManager::checkHorizontal() * deltaTime * 70);
+            velocity.y = (-InputManager::checkVertical() * deltaTime *  70);
+            if (velocity.x != 0 || velocity.y != 0) {
+                direction.x = InputManager::checkHorizontal();
+                direction.y = -InputManager::checkVertical();
+            }
+
+            auto humans = checkBoxGroupCollision("Human");
+            if (humans.size() > 0) {
+                GameObject* human = humans[0];
+                human -> toDestroy = true;
+            }
+
+            SceneManager::camera = {getPosition().x + 10, getPosition().y + 10};
+        }
+
+        Vector2f startPoint;
+};
+
+class Flashlight : public GameObject {
+    public:
+        Flashlight() {
+            anchor = 4;
+            debug = true;
+        }
+        void start() override {
+            //loadTexture("img/enemy.png");
+            size.x = 16*5;
+            size.y = 16*5;
+        }
+
+        void update(float deltaTime) override {
+            position = {parent->direction.x * size.x * 3/4 - size.x/2, parent->direction.y * size.x * 3/4 - size.y/2};
+            updateRealPosition();
+
+            Player* player = dynamic_cast<Player*>(scene->getGroup("Player")[0]);
+            //std::cout << "B" << std::endl;
+            if (checkBoxCollision(player)) {
+                player->moveTo(player->startPoint);
+            }
+        }
+};
+
+class Human : public GameObject {
+    public:
+        Human() {
+            
+        }
+        void start() override {
+            debug = true;
+            loadTexture("img/human.png", true);
+            size.x /= 4;
+            size.y /= 4;
+
+            flashlight = new Flashlight();
+            scene->addToParent(flashlight, this);
+        }
+        void update(float deltaTime) override {
+            if (newBecon) {
+                std::vector<GameObject*> options;
+                for (auto* b : scene->getGroup("Becon")) {
+                    if (b->getPosition().x == getPosition().x || b->getPosition().y == getPosition().y) {
+                        if (b == prevBecon) continue; 
+                        if (b == becon) continue; 
+                        options.push_back(b);
+                    }
+                }
+
+                if (options.size() == 0) {
+                    options.push_back(prevBecon);
+                }
+                
+                GameObject* b = options.at(std::rand() % options.size());
+
+                lookAt(b->getPosition());
+                prevBecon = becon;
+                becon = b;
+                newBecon = false;
+
+            } else {
+                move({direction.x * 57 * deltaTime, 
+                      direction.y * 57 * deltaTime}); 
+                if ((direction.x > 0 && getPosition().x > becon->getPosition().x) ||
+                    (direction.x < 0 && getPosition().x < becon->getPosition().x) ||
+                    (direction.y > 0 && getPosition().y > becon->getPosition().y) ||
+                    (direction.y < 0 && getPosition().y < becon->getPosition().y)) 
+                {    
+                    moveTo(becon->getPosition());
+                    newBecon = true;
+                }
+            }
+             
+            if (toDestroy) {
+                flashlight->toDestroy = true;
+            }
+
+        }
+
+        bool newBecon = true;
+        GameObject* becon = nullptr;
+        GameObject* prevBecon = nullptr;
+        Flashlight* flashlight;
+        bool KILLME = false;
+};
+
+class Tile : public GameObject {
+    public:
+        Tile() {
+             
+        }
+        void start() override {
+
+        }
+        void setTilesetCell(int gridSize, Vector2f cell) {
+            tilesetCell.x = cell.x;
+            tilesetCell.y = cell.y;
+            tilesetCell.w = gridSize;
+            tilesetCell.h = gridSize;
+
+            size.x = gridSize;
+            size.y = gridSize;
+        }
+
+        void update(float deltaTime) override {
+
+        }
+        void draw() override {
+            if (texture == nullptr) {return;}
+
+            spriteRect.x = SceneManager::screen_change_scale * (realPosition.x - centerOffset.x) - (SceneManager::screen_change_scale * SceneManager::camera.x - SceneManager::windowWidth  / 2) - 1; 
+            spriteRect.y = SceneManager::screen_change_scale * (realPosition.y - centerOffset.y) - (SceneManager::screen_change_scale * SceneManager::camera.y - SceneManager::windowHeight / 2) - 1;   
+
+            spriteRect.w = size.x * SceneManager::screen_change_scale + 2;
+            spriteRect.h = size.y * SceneManager::screen_change_scale + 2;
+
+            if (debug) {
+                SDL_SetRenderDrawColor(SceneManager::renderer, 0, 255, 0, 255);
+                SDL_RenderDrawRect(SceneManager::renderer, &spriteRect);  
+            }
+
+            SDL_RenderCopy(SceneManager::renderer, texture, &tilesetCell, &spriteRect);
+        }
+
+        SDL_Rect tilesetCell;
+};
+
+class gameScene : public Scene
+{
+    void load() override
+    {
+        GameObjectFactory factory;
+        factory.Register<Tile>("Tile");
+        factory.Register<Tile>("Becon");
+        factory.Register<Player>("Player");
+        factory.Register<Human>("Human");
+
+        addGroup("Ground");
+        addGroup("Path");
+        addGroup("Tile");
+        addGroup("Becon");
+        addGroup("Player");
+        addGroup("Human");
+        addGroup("Flashlight");
+        //addGroup("UI");
+
+        //UICanvas* canvas = new UICanvas();
+        //add(canvas, "UI");
+
+        //UIPanel* corner = new UIPanel({140, -100, 200, 80}, "img/panel.png");
+        //corner->setCentered();
+        //corner->setAnchor(8);
+        //corner->text = "Health ig";
+        //addToParent(corner, canvas);
+
+        std::ifstream f("img/ldtk/level.ldtk");
+        json data = json::parse(f);
+
+        for (auto const& layer : data["levels"][0]["layerInstances"]) {
+            if (layer["__type"] == "Tiles") {
+                int tileWidth = layer ["__gridSize"];
+                int tileHeight = layer["__gridSize"];
+
+                for (auto const& tile : layer["gridTiles"]) {
+                    Tile* tileObject = new Tile();
+
+                    std::string imageFileLocation;
+
+                    imageFileLocation.append("img/ldtk"); 
+                    imageFileLocation.append("/"); 
+                    imageFileLocation.append(layer["__tilesetRelPath"]);
+
+                    tileObject->loadTexture(imageFileLocation);
+                        
+                    tileObject->setTilesetCell(layer["__gridSize"], {tile["src"][0], tile["src"][1]});
+
+                    tileObject->moveTo({tile["px"][0], tile["px"][1]});
+                    tileObject->size.x = tileWidth;
+                    tileObject->size.y = tileHeight;
+                    if (layer["__identifier"] == "Wall") {
+                        add(tileObject, "Tile");
+                    } else if (layer["__identifier"] == "Path") {
+                        add(tileObject, "Path");
+                    } else {
+                        add(tileObject, "Ground");
+                    }
+                }
+            }
+
+            else if (layer["__type"] == "Entities") {
+                for (auto const& entity : layer["entityInstances"]) {
+                    GameObject* object = factory.Create(entity["__identifier"]);
+                    object->moveTo({entity["px"][0], entity["px"][1]});
+                    object->size.x = entity["width"];
+                    object->size.y = entity["height"];
+                    add(object, entity["__identifier"]);
+                }
+            }
+        }
+    }
+};

@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/build",
+  "command": "/usr/bin/c++  -I/usr/include/SDL2 -I/usr/include/nlohmann -I/home/ethanscharlie/Projects/Code/Github/charlie2d/include -I/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/include -I/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/src/engine -I/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/src/objects -I/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/src/scenes -I/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/src -std=gnu++20 -o CMakeFiles/index.dir/src/main.cpp.o -c /home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/src/main.cpp",
+  "file": "/home/ethanscharlie/Projects/Code/C++/CharlieGames/ICNTBall/src/main.cpp",
+  "output": "CMakeFiles/index.dir/src/main.cpp.o"
+}
+]
